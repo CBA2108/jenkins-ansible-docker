@@ -1,75 +1,63 @@
----
 - name: Install wartest environment
   hosts: all
   become: yes
-  become_user: root
-  vars:
-    docker_image: "{{ image | default('registry.gitlab.com/cba2405234/presentation-jenkins/wartest:version-16') }}"
-
   tasks:
 
-    - name: Gather facts
-      ansible.builtin.setup:
-
     - name: Ensure python3-pip is installed
-      ansible.builtin.apt:
+      apt:
         name: python3-pip
         state: present
         update_cache: yes
 
     - name: Install dependencies for Docker
-      ansible.builtin.apt:
+      apt:
         name:
           - apt-transport-https
           - ca-certificates
           - curl
-          - gnupg
-          - lsb-release
+          - software-properties-common
         state: present
-        update_cache: yes
 
     - name: Add Docker GPG key
       ansible.builtin.apt_key:
         url: https://download.docker.com/linux/ubuntu/gpg
         state: present
-        keyring: /usr/share/keyrings/docker-archive-keyring.gpg
+
+    - name: Remove old conflicting Docker repo file
+      file:
+        path: /etc/apt/sources.list.d/download_docker_com_linux_ubuntu.list
+        state: absent
 
     - name: Add Docker repository for Ubuntu Jammy
       ansible.builtin.apt_repository:
-        repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu {{ ansible_lsb.codename }} stable"
+        repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu jammy stable"
         state: present
-        filename: docker
 
-    - name: Install Docker
-      ansible.builtin.apt:
-        name: docker-ce
-        state: present
+    - name: Update apt cache
+      apt:
         update_cache: yes
 
-    - name: Ensure Docker service is started and enabled
-      ansible.builtin.systemd:
-        name: docker
-        state: started
-        enabled: yes
+    - name: Install Docker packages
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+        state: present
 
     - name: Add Jenkins user to docker group
-      ansible.builtin.user:
+      user:
         name: jenkins
         groups: docker
         append: yes
 
     - name: Install docker Python module
-      ansible.builtin.pip:
+      pip:
         name: docker
         executable: pip3
 
-    - name: Wait for Docker socket to be available
-      ansible.builtin.wait_for:
-        path: /var/run/docker.sock
-        state: present
-        timeout: 30
-
     - name: Pull docker image
-      community.docker.docker_image:
-        name: "{{ docker_image }}"
+      docker_image:
+        name: "{{ image }}"
         source: pull
