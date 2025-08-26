@@ -1,25 +1,30 @@
 ---
 - name: Install wartest environment
   hosts: all
-  become: true
+  become: yes
+  become_user: root
   vars:
-    image: "registry.gitlab.com/cba2405234/presentation-jenkins/wartest:version-15"
+    docker_image: "{{ image | default('registry.gitlab.com/cba2405234/presentation-jenkins/wartest:version-16') }}"
 
   tasks:
 
+    - name: Gather facts
+      ansible.builtin.setup:
+
     - name: Ensure python3-pip is installed
-      apt:
+      ansible.builtin.apt:
         name: python3-pip
         state: present
         update_cache: yes
 
     - name: Install dependencies for Docker
-      apt:
+      ansible.builtin.apt:
         name:
           - apt-transport-https
           - ca-certificates
           - curl
-          - software-properties-common
+          - gnupg
+          - lsb-release
         state: present
         update_cache: yes
 
@@ -27,33 +32,44 @@
       ansible.builtin.apt_key:
         url: https://download.docker.com/linux/ubuntu/gpg
         state: present
+        keyring: /usr/share/keyrings/docker-archive-keyring.gpg
 
-    - name: Add Docker repository
+    - name: Add Docker repository for Ubuntu Jammy
       ansible.builtin.apt_repository:
-        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_lsb.codename }} stable
+        repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu {{ ansible_lsb.codename }} stable"
         state: present
+        filename: docker
 
     - name: Install Docker
-      apt:
-        name:
-          - docker-ce
-          - docker-ce-cli
-          - containerd.io
+      ansible.builtin.apt:
+        name: docker-ce
         state: present
         update_cache: yes
 
+    - name: Ensure Docker service is started and enabled
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+        enabled: yes
+
     - name: Add Jenkins user to docker group
-      user:
+      ansible.builtin.user:
         name: jenkins
         groups: docker
         append: yes
 
     - name: Install docker Python module
-      pip:
+      ansible.builtin.pip:
         name: docker
         executable: pip3
 
+    - name: Wait for Docker socket to be available
+      ansible.builtin.wait_for:
+        path: /var/run/docker.sock
+        state: present
+        timeout: 30
+
     - name: Pull docker image
-      docker_image:
-        name: "{{ image }}"
+      community.docker.docker_image:
+        name: "{{ docker_image }}"
         source: pull
