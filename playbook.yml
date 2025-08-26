@@ -1,9 +1,9 @@
 ---
-- name: install wartest
+- name: Install wartest environment
   hosts: all
-  become: true  # permet d'escalader automatiquement avec sudo
+  become: true
   vars:
-    image: "registry.gitlab.com/cba2405234/presentation-jenkins/wartest:version-13"
+    image: "registry.gitlab.com/cba2405234/presentation-jenkins/wartest:version-15"
 
   tasks:
 
@@ -13,7 +13,42 @@
         state: present
         update_cache: yes
 
-    - name: Install docker-py via pip
+    - name: Install dependencies for Docker
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+        state: present
+        update_cache: yes
+
+    - name: Add Docker GPG key
+      ansible.builtin.apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker repository
+      ansible.builtin.apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_lsb.codename }} stable
+        state: present
+
+    - name: Install Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+        update_cache: yes
+
+    - name: Add Jenkins user to docker group
+      user:
+        name: jenkins
+        groups: docker
+        append: yes
+
+    - name: Install docker Python module
       pip:
         name: docker
         executable: pip3
@@ -22,5 +57,3 @@
       docker_image:
         name: "{{ image }}"
         source: pull
-
-
