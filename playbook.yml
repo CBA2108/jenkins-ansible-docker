@@ -1,8 +1,26 @@
-
+---
 - name: install wartest
   hosts: all
-  become: yes
-  roles:
-    - wartest
+  become: true  # permet d'escalader automatiquement avec sudo
+  vars:
+    image: "registry.gitlab.com/cba2405234/presentation-jenkins/wartest:version-13"
+
+  tasks:
+
+    - name: Ensure python3-pip is installed
+      apt:
+        name: python3-pip
+        state: present
+        update_cache: yes
+
+    - name: Install docker-py via pip
+      pip:
+        name: docker
+        executable: pip3
+
+    - name: Pull docker image
+      docker_image:
+        name: "{{ image }}"
+        source: pull
 
 
